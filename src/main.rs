@@ -35,12 +35,18 @@ async fn handle_connection(stream: tokio::net::TcpStream) {
         let msg = msg.expect("Error reading message");
 
         if msg.is_text() {
+            let text = msg.to_text().unwrap();
+            if text == "2" {
+                write.send(Message::text("3")).await.expect("Error sending message");
+                continue;
+            }
+
             let request_path = path.read().await.clone();
             let target_url = match map_websocket_to_http(&request_path) {
                 Some(url) => url,
                 None => {
                     write.send(Message::text("{}")).await.expect("Error sending message");
-                    return;
+                    continue;
                 }
             };
 
