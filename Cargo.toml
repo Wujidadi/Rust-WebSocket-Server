@@ -4,7 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+chrono = "0.4.38"
+futures-util = "0.3"
+log = "0.4"
+reqwest = { version = "0.12.4", features = ["json"] }
+simplelog = "0.12.2"
+time = "0.3.36"
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.23.0"
-futures-util = "0.3"
-reqwest = { version = "0.12.4", features = ["json"] }

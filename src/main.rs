@@ -1,13 +1,40 @@
-use tokio::net::TcpListener;
-use tokio_tungstenite::{accept_hdr_async, tungstenite::protocol::Message};
-use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+use futures_util::{SinkExt, StreamExt};
 use reqwest::Client;
-use futures_util::{StreamExt, SinkExt};
+use simplelog::*;
+use std::fs::{create_dir_all, OpenOptions};
 use std::sync::Arc;
+use time::macros::format_description;
+use time::{OffsetDateTime, UtcOffset};
+use tokio::net::TcpListener;
 use tokio::time::{timeout, Duration};
+use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+use tokio_tungstenite::{accept_hdr_async, tungstenite::protocol::Message};
 
 #[tokio::main]
 async fn main() {
+    create_dir_all("logs").unwrap();
+
+    let timezone = UtcOffset::from_hms(8, 0, 0).unwrap();
+    let config = ConfigBuilder::new()
+        .set_time_format_custom(format_description!(
+            "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:6]"
+        ))
+        .set_time_offset(timezone)
+        .build();
+
+    let now = OffsetDateTime::now_utc().to_offset(timezone);
+    let date = now
+        .format(&format_description!("[year]-[month]-[day]"))
+        .unwrap();
+    let log_file_name = format!("logs/server_{}.log", date);
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_file_name)
+        .unwrap();
+
+    CombinedLogger::init(vec![WriteLogger::new(LevelFilter::Info, config, log_file)]).unwrap();
+
     let addr = "127.0.0.1:6005".to_string();
     let listener = TcpListener::bind(&addr).await.unwrap();
     println!("WebSocket server running on ws://{}", addr);
@@ -27,20 +54,27 @@ async fn handle_connection(stream: tokio::net::TcpStream) {
             *path.write().await = request_path;
         });
         Ok(res)
-    }).await.expect("Error during WebSocket handshake");
+    })
+    .await
+    .expect("Error during WebSocket handshake");
 
     let (mut write, mut read) = ws_stream.split();
     let client = Arc::new(Client::new());
 
     loop {
-        let msg = timeout(Duration::from_secs(10), read.next()).await;
+        let msg = timeout(Duration::from_secs(50), read.next()).await;
 
         match msg {
             Ok(Some(Ok(msg))) => {
                 if msg.is_text() {
                     let text = msg.to_text().unwrap();
+                    log::info!("Received message: {}", text);
+
                     if text == "2" {
-                        write.send(Message::text("3")).await.expect("Error sending message");
+                        write
+                            .send(Message::text("3"))
+                            .await
+                            .expect("Error sending message");
                         continue;
                     }
 
@@ -48,24 +82,33 @@ async fn handle_connection(stream: tokio::net::TcpStream) {
                     let target_url = match map_websocket_to_http(&request_path) {
                         Some(url) => url,
                         None => {
-                            write.send(Message::text("{}")).await.expect("Error sending message");
+                            write
+                                .send(Message::text("{}"))
+                                .await
+                                .expect("Error sending message");
                             continue;
                         }
                     };
 
                     let client = client.clone();
-                    let response = client.post(target_url)
-                        .body(msg.to_string())
-                        .send()
-                        .await;
+                    let response = client.post(target_url).body(msg.to_string()).send().await;
 
                     match response {
                         Ok(resp) => {
-                            let resp_text = resp.text().await.unwrap_or_else(|_| "Error reading response".to_string());
-                            write.send(Message::text(resp_text)).await.expect("Error sending message");
+                            let resp_text = resp
+                                .text()
+                                .await
+                                .unwrap_or_else(|_| "Error reading response".to_string());
+                            write
+                                .send(Message::text(resp_text))
+                                .await
+                                .expect("Error sending message");
                         }
                         Err(_) => {
-                            write.send(Message::text("Failed to process request")).await.expect("Error sending message");
+                            write
+                                .send(Message::text("Failed to process request"))
+                                .await
+                                .expect("Error sending message");
                         }
                     }
                 }
