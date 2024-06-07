@@ -1,10 +1,12 @@
 use std::{
+    env,
     fs::{create_dir_all, OpenOptions},
     io::Write,
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
 
+use dotenv::dotenv;
 use futures_util::{
     SinkExt,
     stream::SplitSink,
@@ -48,12 +50,16 @@ impl Drop for ServerGuard {
 
 #[tokio::main]
 async fn main() {
+    dotenv().ok();
+
     create_dir_all("logs").unwrap();
     update_log_file();
 
-    log_message(Level::Info, "WebSocket server is starting...");
+    let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = env::var("PORT").unwrap_or_else(|_| "6005".to_string());
+    let addr = format!("{}:{}", host, port);
 
-    let addr = "127.0.0.1:6005".to_string();
+    log_message(Level::Info, "WebSocket server is starting...");
     let listener = TcpListener::bind(&addr).await.unwrap();
     println!("WebSocket server running on ws://{}", addr);
 
