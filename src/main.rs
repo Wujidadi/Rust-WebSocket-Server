@@ -1,25 +1,38 @@
-use std::fs::{create_dir_all, OpenOptions};
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{
+    fs::{create_dir_all, OpenOptions},
+    net::SocketAddr,
+    sync::Arc,
+};
 
-use futures_util::{SinkExt, StreamExt};
-use futures_util::stream::SplitSink;
+use futures_util::{
+    SinkExt,
+    stream::SplitSink,
+    StreamExt,
+};
 use lazy_static::lazy_static;
 use reqwest::Client;
 use simplelog::*;
-use time::{OffsetDateTime, UtcOffset};
-use time::format_description::{self, FormatItem};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::signal;
-use tokio::time::{Duration, timeout};
-use tokio_tungstenite::{accept_hdr_async, tungstenite::protocol::Message};
-use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
-use tokio_tungstenite::WebSocketStream;
+use time::{
+    format_description::{self, FormatItem},
+    OffsetDateTime,
+    UtcOffset,
+};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    signal,
+    time::{Duration, timeout},
+};
+use tokio_tungstenite::{
+    accept_hdr_async,
+    tungstenite::handshake::server::{Request, Response},
+    tungstenite::protocol::Message,
+    WebSocketStream,
+};
 
 lazy_static! {
     static ref LOG_TIME_FORMAT: Vec<FormatItem<'static>> = {
-        let log_time_format_str = "[[[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:6]]";
-        format_description::parse(log_time_format_str).unwrap()
+        let log_time_format = "[[[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:6]]";
+        format_description::parse(log_time_format).unwrap()
     };
 }
 
