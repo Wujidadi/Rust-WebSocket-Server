@@ -1,7 +1,9 @@
 use std::fs::{create_dir_all, OpenOptions};
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
+use futures_util::stream::SplitSink;
 use lazy_static::lazy_static;
 use reqwest::Client;
 use simplelog::*;
@@ -12,6 +14,7 @@ use tokio::signal;
 use tokio::time::{Duration, timeout};
 use tokio_tungstenite::{accept_hdr_async, tungstenite::protocol::Message};
 use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+use tokio_tungstenite::WebSocketStream;
 
 lazy_static! {
     static ref LOG_TIME_FORMAT: Vec<FormatItem<'static>> = {
@@ -106,51 +109,7 @@ async fn handle_connection(stream: TcpStream) {
         match msg {
             Ok(Some(Ok(msg))) => {
                 if msg.is_text() {
-                    let text = msg.to_text().unwrap();
-                    log::info!("Received message from {}: {}", peer_addr, text);
-
-                    // Simulate the "ping" and "pong" in Socket.io
-                    if text == "2" {
-                        write
-                            .send(Message::text("3"))
-                            .await
-                            .expect("Error sending message");
-                        continue;
-                    }
-
-                    let request_path = path.read().await.clone();
-                    let target_url = match map_websocket_to_http(&request_path) {
-                        Some(url) => url,
-                        None => {
-                            write
-                                .send(Message::text("{}"))
-                                .await
-                                .expect("Error sending message");
-                            continue;
-                        }
-                    };
-
-                    let client = client.clone();
-                    let response = client.post(target_url).body(msg.to_string()).send().await;
-
-                    match response {
-                        Ok(resp) => {
-                            let resp_text = resp
-                                .text()
-                                .await
-                                .unwrap_or_else(|_| "Error reading response".to_string());
-                            write
-                                .send(Message::text(resp_text))
-                                .await
-                                .expect("Error sending message");
-                        }
-                        Err(_) => {
-                            write
-                                .send(Message::text("Failed to process request"))
-                                .await
-                                .expect("Error sending message");
-                        }
-                    }
+                    handle_text_message(msg, peer_addr, &mut write, &path, &client).await;
                 }
             }
             Ok(Some(Err(e))) => {
@@ -167,6 +126,43 @@ async fn handle_connection(stream: TcpStream) {
                 log::info!("Client {} timed out due to inactivity", peer_addr);
                 break;
             }
+        }
+    }
+}
+
+async fn handle_text_message(
+    msg: Message,
+    peer_addr: SocketAddr,
+    write: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
+    path: &Arc<tokio::sync::RwLock<String>>,
+    client: &Arc<Client>,
+) {
+    let text = msg.to_text().unwrap();
+    log::info!("Received message from {}: {}", peer_addr, text);
+
+    if text == "2" {
+        write.send(Message::text("3")).await.expect("Error sending message");
+        return;
+    }
+
+    let request_path = path.read().await.clone();
+    let target_url = match map_websocket_to_http(&request_path) {
+        Some(url) => url,
+        None => {
+            write.send(Message::text("{}")).await.expect("Error sending message");
+            return;
+        }
+    };
+
+    let response = client.post(target_url).body(msg.to_string()).send().await;
+
+    match response {
+        Ok(resp) => {
+            let resp_text = resp.text().await.unwrap_or_else(|_| "Error reading response".to_string());
+            write.send(Message::text(resp_text)).await.expect("Error sending message");
+        }
+        Err(_) => {
+            write.send(Message::text("Failed to process request")).await.expect("Error sending message");
         }
     }
 }
