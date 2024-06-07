@@ -1,14 +1,15 @@
+use std::fs::{create_dir_all, OpenOptions};
+use std::sync::Arc;
+
 use futures_util::{SinkExt, StreamExt};
 use reqwest::Client;
 use simplelog::*;
-use std::fs::{create_dir_all, OpenOptions};
-use std::sync::Arc;
-use time::macros::format_description;
 use time::{OffsetDateTime, UtcOffset};
+use time::macros::format_description;
 use tokio::net::TcpListener;
-use tokio::time::{timeout, Duration};
-use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+use tokio::time::{Duration, timeout};
 use tokio_tungstenite::{accept_hdr_async, tungstenite::protocol::Message};
+use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
 
 #[tokio::main]
 async fn main() {
@@ -55,8 +56,8 @@ async fn handle_connection(stream: tokio::net::TcpStream) {
         });
         Ok(res)
     })
-    .await
-    .expect("Error during WebSocket handshake");
+        .await
+        .expect("Error during WebSocket handshake");
 
     let (mut write, mut read) = ws_stream.split();
     let client = Arc::new(Client::new());
