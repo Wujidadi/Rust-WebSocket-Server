@@ -2,28 +2,44 @@ use std::fs::{create_dir_all, OpenOptions};
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
+use lazy_static::lazy_static;
 use reqwest::Client;
 use simplelog::*;
 use time::{OffsetDateTime, UtcOffset};
-use time::macros::format_description;
-use tokio::net::TcpListener;
+use time::format_description::{self, FormatItem};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::signal;
 use tokio::time::{Duration, timeout};
 use tokio_tungstenite::{accept_hdr_async, tungstenite::protocol::Message};
 use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+
+lazy_static! {
+    static ref LOG_TIME_FORMAT: Vec<FormatItem<'static>> = {
+        let log_time_format_str = "[[[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:6]]";
+        format_description::parse(log_time_format_str).unwrap()
+    };
+}
+
+struct ServerGuard;
+
+impl Drop for ServerGuard {
+    fn drop(&mut self) {
+        log::info!("Server is shutting down...");
+    }
+}
 
 #[tokio::main]
 async fn main() {
     create_dir_all("logs").unwrap();
 
     let timezone = UtcOffset::from_hms(8, 0, 0).unwrap();
+    let now = OffsetDateTime::now_utc().to_offset(timezone);
+
     let config = ConfigBuilder::new()
-        .set_time_format_custom(format_description!(
-            "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:6]"
-        ))
+        .set_time_format_custom(&LOG_TIME_FORMAT)
         .set_time_offset(timezone)
         .build();
 
-    let now = OffsetDateTime::now_utc().to_offset(timezone);
     let date = now
         .format(&format_description!("[year]-[month]-[day]"))
         .unwrap();
@@ -36,16 +52,38 @@ async fn main() {
 
     CombinedLogger::init(vec![WriteLogger::new(LevelFilter::Info, config, log_file)]).unwrap();
 
+    log::info!("WebSocket server is starting...");
+
     let addr = "127.0.0.1:6005".to_string();
     let listener = TcpListener::bind(&addr).await.unwrap();
     println!("WebSocket server running on ws://{}", addr);
 
-    while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(handle_connection(stream));
+    let server_guard = ServerGuard;
+
+    let server = tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            tokio::spawn(handle_connection(stream));
+        }
+    });
+
+    tokio::select! {
+        _ = signal::ctrl_c() => {
+            log::info!("Received Ctrl-C signal");
+        }
+        result = server => {
+            if let Err(e) = result {
+                log::error!("Server task failed: {:?}", e);
+            }
+        }
     }
+
+    drop(server_guard);
 }
 
-async fn handle_connection(stream: tokio::net::TcpStream) {
+async fn handle_connection(stream: TcpStream) {
+    let peer_addr = stream.peer_addr().unwrap();
+    log::info!("Client connected: {}", peer_addr);
+
     let path = Arc::new(tokio::sync::RwLock::new(String::new()));
 
     let ws_stream = accept_hdr_async(stream, |req: &Request, res: Response| {
@@ -69,8 +107,9 @@ async fn handle_connection(stream: tokio::net::TcpStream) {
             Ok(Some(Ok(msg))) => {
                 if msg.is_text() {
                     let text = msg.to_text().unwrap();
-                    log::info!("Received message: {}", text);
+                    log::info!("Received message from {}: {}", peer_addr, text);
 
+                    // Simulate the "ping" and "pong" in Socket.io
                     if text == "2" {
                         write
                             .send(Message::text("3"))
@@ -115,15 +154,17 @@ async fn handle_connection(stream: tokio::net::TcpStream) {
                 }
             }
             Ok(Some(Err(e))) => {
-                eprintln!("Error reading message: {:?}", e);
+                eprintln!("Error reading message from {}: {:?}", peer_addr, e);
                 break;
             }
             Ok(None) => {
-                println!("Client disconnected");
+                println!("Client {} disconnected", peer_addr);
+                log::info!("Client {} disconnected", peer_addr);
                 break;
             }
             Err(_) => {
-                println!("Client timed out due to inactivity");
+                println!("Client {} timed out due to inactivity", peer_addr);
+                log::info!("Client {} timed out due to inactivity", peer_addr);
                 break;
             }
         }

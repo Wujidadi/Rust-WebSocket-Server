@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.38"
 futures-util = "0.3"
+lazy_static = "1.4.0"
 log = "0.4"
 reqwest = { version = "0.12.4", features = ["json"] }
 simplelog = "0.12.2"
