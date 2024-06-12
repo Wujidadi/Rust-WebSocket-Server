@@ -4,14 +4,15 @@ use futures_util::StreamExt;
 use log::Level;
 use reqwest::Client;
 use tokio::net::TcpStream;
-use tokio::time::{Duration, timeout};
+use tokio::time::timeout;
 use tokio_tungstenite::accept_hdr_async;
 use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
 
+use crate::config::Config;
 use crate::log::log_message;
 use crate::message::text as handle_text_message;
 
-pub async fn handle(stream: TcpStream) {
+pub async fn handle(stream: TcpStream, config: Arc<Config>) {
     let peer_addr = stream.peer_addr().unwrap();
     log_message(Level::Info, &format!("Client connected: {}", peer_addr));
 
@@ -32,7 +33,7 @@ pub async fn handle(stream: TcpStream) {
     let client = Arc::new(Client::new());
 
     loop {
-        let msg = timeout(Duration::from_secs(50), read.next()).await;
+        let msg = timeout(config.timeout(), read.next()).await;
 
         match msg {
             Ok(Some(Ok(msg))) => {

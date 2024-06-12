@@ -1,4 +1,5 @@
 use std::fs::create_dir_all;
+use std::sync::Arc;
 
 use simplelog::*;
 use tokio::{net::TcpListener, signal};
@@ -26,18 +27,20 @@ async fn main() {
     create_dir_all("logs").unwrap();
     update_log_file();
 
-    let config = Config::new();
-    let addr = config.address();
+    let config = Arc::new(Config::new());
 
     log_message(Level::Info, "WebSocket server is starting...");
-    let listener = TcpListener::bind(&addr).await.unwrap();
-    println!("WebSocket server running on ws://{}", addr);
+    let listener = TcpListener::bind(config.address()).await.unwrap();
+    println!("WebSocket server running on ws://{}", config.address());
 
     let server_guard = ServerGuard;
 
     let server = tokio::spawn(async move {
         while let Ok((stream, _)) = listener.accept().await {
-            tokio::spawn(handle_connect(stream));
+            let config = config.clone();
+            tokio::spawn(async move {
+                handle_connect(stream, config).await;
+            });
         }
     });
 
