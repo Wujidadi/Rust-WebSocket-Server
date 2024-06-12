@@ -14,6 +14,17 @@ use tokio_tungstenite::WebSocketStream;
 use crate::log::{LOG_FILE, log_message, update_log_file};
 use crate::routes::map as route_map;
 
+async fn ping_pong(text: &str, write: &mut SplitSink<WebSocketStream<TcpStream>, Message>) -> bool {
+    if text == "2" {
+        write
+            .send(Message::text("3"))
+            .await
+            .expect("Error sending message");
+        return true;
+    }
+    false
+}
+
 pub async fn text(
     msg: Message,
     peer_addr: SocketAddr,
@@ -27,11 +38,7 @@ pub async fn text(
         &format!("Received message from {}: {}", peer_addr, text),
     );
 
-    if text == "2" {
-        write
-            .send(Message::text("3"))
-            .await
-            .expect("Error sending message");
+    if ping_pong(text, write).await {
         return;
     }
 
