@@ -22,10 +22,16 @@ pub async fn text(
     client: &Arc<Client>,
 ) {
     let text = msg.to_text().unwrap();
-    log_message(Level::Info, &format!("Received message from {}: {}", peer_addr, text));
+    log_message(
+        Level::Info,
+        &format!("Received message from {}: {}", peer_addr, text),
+    );
 
     if text == "2" {
-        write.send(Message::text("3")).await.expect("Error sending message");
+        write
+            .send(Message::text("3"))
+            .await
+            .expect("Error sending message");
         return;
     }
 
@@ -33,7 +39,10 @@ pub async fn text(
     let target_url = match route_map(&request_path) {
         Some(url) => url,
         None => {
-            write.send(Message::text("{}")).await.expect("Error sending message");
+            write
+                .send(Message::text("{}"))
+                .await
+                .expect("Error sending message");
             return;
         }
     };
@@ -42,11 +51,20 @@ pub async fn text(
 
     match response {
         Ok(resp) => {
-            let resp_text = resp.text().await.unwrap_or_else(|_| "Error reading response".to_string());
-            write.send(Message::text(resp_text)).await.expect("Error sending message");
+            let resp_text = resp
+                .text()
+                .await
+                .unwrap_or_else(|_| "Error reading response".to_string());
+            write
+                .send(Message::text(resp_text))
+                .await
+                .expect("Error sending message");
         }
         Err(_) => {
-            write.send(Message::text("Failed to process request")).await.expect("Error sending message");
+            write
+                .send(Message::text("Failed to process request"))
+                .await
+                .expect("Error sending message");
         }
     }
 

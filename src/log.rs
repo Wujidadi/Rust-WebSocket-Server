@@ -5,7 +5,10 @@ use std::sync::Mutex;
 use lazy_static::lazy_static;
 use log::Level;
 use simplelog::format_description;
-use time::{format_description::{self, FormatItem}, OffsetDateTime, UtcOffset};
+use time::{
+    format_description::{self, FormatItem},
+    OffsetDateTime, UtcOffset,
+};
 
 lazy_static! {
     static ref LOG_TIME_FORMAT: Vec<FormatItem<'static>> = {
@@ -39,9 +42,7 @@ pub fn log_message(level: Level, message: &str) {
     if let Some(ref mut log_file) = *log_file_guard {
         let timezone = UtcOffset::from_hms(8, 0, 0).unwrap();
         let now = OffsetDateTime::now_utc().to_offset(timezone);
-        let timestamp = now
-            .format(&LOG_TIME_FORMAT)
-            .unwrap();
+        let timestamp = now.format(&LOG_TIME_FORMAT).unwrap();
         writeln!(log_file, "[{}] {}: {}", timestamp, level, message).unwrap();
     }
 }

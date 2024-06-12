@@ -26,8 +26,8 @@ pub async fn handle(stream: TcpStream, config: Arc<Config>) {
         });
         Ok(res)
     })
-        .await
-        .expect("Error during WebSocket handshake");
+    .await
+    .expect("Error during WebSocket handshake");
 
     let (mut write, mut read) = ws_stream.split();
     let client = Arc::new(Client::new());
@@ -52,7 +52,10 @@ pub async fn handle(stream: TcpStream, config: Arc<Config>) {
             }
             Err(_) => {
                 println!("Client {} timed out due to inactivity", peer_addr);
-                log_message(Level::Info, &format!("Client {} timed out due to inactivity", peer_addr));
+                log_message(
+                    Level::Info,
+                    &format!("Client {} timed out due to inactivity", peer_addr),
+                );
                 break;
             }
         }

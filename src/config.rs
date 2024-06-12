@@ -20,7 +20,11 @@ impl Config {
             .map(Duration::from_millis)
             .unwrap_or_else(|| Duration::from_secs(50_000_000));
 
-        Config { host, port, timeout }
+        Config {
+            host,
+            port,
+            timeout,
+        }
     }
 
     pub fn address(&self) -> String {

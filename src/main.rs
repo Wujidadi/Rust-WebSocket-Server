@@ -9,10 +9,10 @@ use connect::handle as handle_connect;
 use log::{log_message, update_log_file};
 
 mod config;
-mod routes;
-mod log;
 mod connect;
+mod log;
 mod message;
+mod routes;
 
 struct ServerGuard;
 
